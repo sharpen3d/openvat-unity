@@ -1,0 +1,18 @@
+{
+  "name": "com.lukestilson.openvat",
+  "version": "1.0.0",
+  "displayName": "OpenVAT",
+  "description": "A package to import and use openVAT content in Unity.",
+  "unity": "2020.1",
+  "keywords": [
+    "VAT",
+    "openVAT",
+    "editor",
+    "shader"
+  ],
+  "author": {
+    "name": "Luke Stilson",
+    "email": "stilson.luke@gmail.com",
+    "url": "https://lukestilson.com"
+  }
+}
