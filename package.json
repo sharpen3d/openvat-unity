@@ -1,6 +1,6 @@
 {
   "name": "com.lukestilson.openvat",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "displayName": "OpenVAT",
   "description": "A package to import and use openVAT content in Unity.",
   "unity": "2020.1",
