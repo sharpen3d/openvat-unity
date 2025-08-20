@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using System.IO;
 using System.Diagnostics;
+using System.Linq;
 
 public class OpenVATEditor : EditorWindow
 {
@@ -34,26 +35,35 @@ public class OpenVATEditor : EditorWindow
             return;
         }
 
+        // Support FBX, GLB, and GLTF
         string[] fbxFiles = Directory.GetFiles(folderPath, "*.fbx");
-        string[] vatTextures = Directory.GetFiles(folderPath, "*_vat.png");
+        string[] glbFiles = Directory.GetFiles(folderPath, "*.glb");
+        string[] gltfFiles = Directory.GetFiles(folderPath, "*.gltf");
+        string[] modelFiles = fbxFiles.Concat(glbFiles).Concat(gltfFiles).ToArray();
+
+        // Support PNG and EXR textures
+        string[] pngTextures = Directory.GetFiles(folderPath, "*_vat.png");
+        string[] exrTextures = Directory.GetFiles(folderPath, "*_vat.exr");
+        string[] vatTextures = pngTextures.Concat(exrTextures).ToArray();
+
         string[] jsonFiles = Directory.GetFiles(folderPath, "*.json");
 
-        if (fbxFiles.Length == 0 || vatTextures.Length == 0 || jsonFiles.Length == 0)
+        if (modelFiles.Length == 0 || vatTextures.Length == 0 || jsonFiles.Length == 0)
         {
             UnityEngine.Debug.LogError("Required files are missing in the folder.");
             return;
         }
 
-        string fbxPath = fbxFiles[0];
+        string modelPath = modelFiles[0];
         string vatTexturePath = vatTextures[0];
         string jsonPath = jsonFiles[0];
 
         // Re-import VAT and optional textures with correct settings
-        ImportTexture(vatTexturePath, false, false);
+        ImportTexture(vatTexturePath, false);
         string vnrmTexturePath = Directory.GetFiles(folderPath, "*_vnrm.png").Length > 0 ? Directory.GetFiles(folderPath, "*_vnrm.png")[0] : null;
         if (vnrmTexturePath != null)
         {
-            ImportTexture(vnrmTexturePath, false, false);
+            ImportTexture(vnrmTexturePath, false);
         }
 
         // Re-import PBR textures with correct settings
@@ -66,11 +76,11 @@ public class OpenVATEditor : EditorWindow
 
         if (normalPath != null)
         {
-            ImportTexture(normalPath, true, false);
+            ImportTexture(normalPath, true);
         }
 
         // Create material
-        string materialPath = Path.Combine(folderPath, Path.GetFileNameWithoutExtension(fbxPath) + "_mat.mat");
+        string materialPath = Path.Combine(folderPath, Path.GetFileNameWithoutExtension(modelPath) + "_mat.mat");
         Material material = new Material(Shader.Find(basecolorPath != null ? "Shader Graphs/openVAT_decoder" : "Shader Graphs/openVAT_decoder_basic"));
 
         material.SetTexture("_openVAT_main", AssetDatabase.LoadAssetAtPath<Texture2D>(vatTexturePath));
@@ -110,7 +120,7 @@ public class OpenVATEditor : EditorWindow
         AssetDatabase.SaveAssets();
 
         // Add FBX to scene and apply material
-        GameObject fbxObject = Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath));
+        GameObject fbxObject = Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(modelPath));
 
         // Ensure the object is at the origin
         fbxObject.transform.position = Vector3.zero;
@@ -119,22 +129,38 @@ public class OpenVATEditor : EditorWindow
         fbxObject.GetComponent<Renderer>().sharedMaterial = material;
 
         // Save as prefab
-        string prefabPath = Path.Combine(folderPath, Path.GetFileNameWithoutExtension(fbxPath) + ".prefab");
+        string prefabPath = Path.Combine(folderPath, Path.GetFileNameWithoutExtension(modelPath) + ".prefab");
         PrefabUtility.SaveAsPrefabAsset(fbxObject, prefabPath);
         DestroyImmediate(fbxObject);
 
         EditorSceneManager.MarkAllScenesDirty();
     }
 
-    private void ImportTexture(string path, bool isNormalMap, bool sRGB)
+    private void ImportTexture(string path, bool isNormalMap)
     {
         TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) return;
+
+        importer.textureType = isNormalMap ? TextureImporterType.NormalMap : TextureImporterType.Default;
+        importer.sRGBTexture = false;
+        importer.filterMode = FilterMode.Point;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
-        importer.sRGBTexture = sRGB;
-        if (isNormalMap)
+        importer.mipmapEnabled = false;
+
+        // Set max texture size
+        Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        if (tex != null)
+            importer.maxTextureSize = Mathf.Max(tex.width, tex.height);
+
+        // Set format based on source (8/16/32 bit)
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings
         {
-            importer.textureType = TextureImporterType.NormalMap;
-        }
+            overridden = true,
+            maxTextureSize = importer.maxTextureSize,
+            // format = GetTextureFormat(tex)
+        });
+
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
     }
 
